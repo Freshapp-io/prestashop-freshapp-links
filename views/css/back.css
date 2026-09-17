@@ -1,0 +1,17 @@
+/**
+ * FreshApp Links
+ *
+ * @author    FreshApp.io
+ * @copyright 2026 FreshApp.io
+ * @license   Proprietary - see LICENSE file
+ */
+
+#fpl-target-results div:hover {
+  background: #f5f5f5;
+}
+
+.fpl-custom-url-field .input-group-addon {
+  vertical-align: middle;
+  text-align: center;
+  padding: 6px 0;
+}
