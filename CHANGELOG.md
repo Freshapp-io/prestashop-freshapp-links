@@ -7,7 +7,7 @@ formulée côté marchand : le bloc d'une version se colle tel quel dans le cham
 ## 1.1.0 — 2026-09-17
 
 - Le module devient FreshApp Links.
-- Compatibilité étendue de PrestaShop 1.7 à PrestaShop 9.
+- Compatibilité étendue : PrestaShop 1.7.8, 8 et 9.
 - Icônes embarquées dans le module : elles s'affichent quel que soit le thème.
 
 ## 1.0.4 — 2026-08-10
