@@ -125,6 +125,15 @@ class AdminFreshapplinksLinkController extends ModuleAdminController
         return preg_match('/^\d*\.?\d+(rem|px|em|%)$/', $raw) ? $raw : '';
     }
 
+    /** Rendu d'un gabarit de views/templates/admin. */
+    private function fetchTemplate(string $name, array $vars): string
+    {
+        require_once __DIR__ . '/AdminFreshapplinksController.php';
+        $this->context->smarty->assign(AdminFreshapplinksController::decodeLabels($vars));
+
+        return $this->context->smarty->fetch($this->module->getLocalPath() . 'views/templates/admin/' . $name . '.tpl');
+    }
+
     /* ------------------------------------------------------------------ */
     /* Recherche AJAX (autocomplete produit / catégorie / page CMS) */
     /* ------------------------------------------------------------------ */
@@ -224,116 +233,27 @@ class AdminFreshapplinksLinkController extends ModuleAdminController
         ];
 
         $backUrl = $this->context->link->getAdminLink('AdminFreshapplinks');
-        $back = '<p style="margin:10px 0"><a href="' . $backUrl . '" class="btn btn-default"><i class="icon-arrow-left"></i> ' . $this->l('Retour aux listes') . '</a></p>';
+        $back = $this->fetchTemplate('button-link', [
+            'fpl_form_group' => false,
+            'fpl_url' => $backUrl,
+            'fpl_icon' => 'icon-arrow-left',
+            'fpl_label' => $this->l('Retour aux listes'),
+        ]);
 
         return $back . parent::renderList() . $this->renderDragDropScript();
     }
 
     /**
-     * Le drag & drop natif de HelperList de PS9 ('position' => 'position') ne persiste pas sur
-     * cette install par défaut. La page charge aussi automatiquement le `js/admin/dnd.js` du core
-     * PrestaShop (déclenché par `orderBy=position`), qui auto-initialise jQuery `tableDnD` sur
-     * cette même table avec `dragHandle: "dragHandle"` (lié à la cellule icône
-     * `<td class="dragHandle">`, pas au `<tr>`) et son propre `onDrop` — mais cet `onDrop` du core
-     * poste un format de payload (`action=updatePositions&id=X&way=Y`) que notre
-     * `ajaxProcessUpdatePositions()` surchargé ci-dessous ne comprend pas, donc il ne fait
-     * silencieusement rien. Plutôt que de lutter contre `tableDnD` (le drag-and-drop HTML5 natif
-     * sur `<tr>` a été testé et ne déclenche jamais `dragstart` sur cette install — un autre
-     * script intercepte le mousedown en premier), on RÉUTILISE le plugin : on purge le listener
-     * du core de l'élément réel auquel il est lié (`.dragHandle`, pas la ligne) et on réinitialise
-     * avec notre propre `onDrop` qui sauvegarde le nouvel ordre. `dragHandle: "dragHandle"` sur
-     * NOTRE réinit aussi, pour qu'un clic tombant sur le glyphe de l'icône lui-même (pas juste le
-     * fond du `<td>`) démarre quand même le drag. Voir
-     * `AdminThemeconfigurationController::renderDragDropScript()` pour l'implémentation de
-     * référence dont ceci a été porté (vérifiée de bout en bout via une vraie session BO
-     * Playwright). Scopé à la liste courante via le propre filtre id_freshapplinks_list de
-     * ajaxProcessUpdatePositions().
+     * Glisser-déposer des liens, limité à la liste courante par ajaxProcessUpdatePositions() :
+     * voir views/js/admin.js.
      */
     private function renderDragDropScript(): string
     {
-        $ajaxUrl = self::$currentIndex . '&token=' . $this->token . '&ajax=1&action=UpdatePositions';
-
-        return '
-        <script>
-        (function(){
-          var TAG = "[FLL-DnD]";
-          function L(){ try { console.log.apply(console, [TAG].concat([].slice.call(arguments))); } catch(e){} }
-          var ajaxUrl = ' . json_encode($ajaxUrl) . ';
-
-          function ridOf(tr){
-            // Ligne HelperList native : id="tr_{groupe}_{id}_{position}" → l\'id de
-            // l\'enregistrement est l\'avant-dernier segment (le dernier = la position).
-            var parts = (tr.id || "").split("_");
-            return parts[parts.length - 2];
-          }
-
-          function savePositions(tbody){
-            var ids = [];
-            tbody.querySelectorAll("tr").forEach(function(tr){
-              var rid = ridOf(tr);
-              if (rid) ids.push(rid);
-            });
-            L("savePositions -> ids (nouvel ordre) =", ids.join(","));
-            var body = new URLSearchParams();
-            body.set("positions", ids.join(","));
-            fetch(ajaxUrl, { method: "POST", body: body, credentials: "same-origin" })
-              .then(function(r){ L("réponse HTTP", r.status); return r.text(); })
-              .then(function(t){ L("corps réponse =", t); })
-              .catch(function(err){ L("ERREUR fetch =", err); });
-          }
-
-          function setup(){
-            var table = document.getElementById("table-' . $this->table . '");
-            var tbody = table ? table.querySelector("tbody") : null;
-            if (!table) { L("ERREUR: table introuvable"); return; }
-            if (!tbody) { L("ERREUR: tbody introuvable"); return; }
-            L("setup, nb lignes =", tbody.querySelectorAll("tr").length, "| ajaxUrl =", ajaxUrl);
-
-            var $ = window.jQuery;
-
-            if ($ && $.fn && typeof $.fn.tableDnD === "function") {
-              $(table).find("tbody tr").off("mousedown");
-              $(table).find(".dragHandle").off("mousedown");
-              $(table).tableDnD({
-                dragHandle: "dragHandle",
-                onDrop: function(t){
-                  L("onDrop tableDnD");
-                  savePositions(t.querySelector("tbody") || tbody);
-                }
-              });
-              L("OK: tableDnD ré-initialisé avec onDrop -> sauvegarde (dragHandle core purgé)");
-              return;
-            }
-
-            // Repli si tableDnD indisponible : drag & drop HTML5 natif.
-            L("tableDnD indisponible -> repli HTML5 natif");
-            var dragging = null;
-            tbody.querySelectorAll("tr").forEach(function(row){
-              row.setAttribute("draggable", "true");
-              row.style.cursor = "move";
-              row.addEventListener("dragstart", function(e){
-                dragging = row; row.style.opacity = "0.4"; L("dragstart", row.id);
-                if (e.dataTransfer) { e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", row.id || ""); } catch (err) {} }
-              });
-              row.addEventListener("dragend", function(){ row.style.opacity = ""; dragging = null; });
-              row.addEventListener("dragover", function(e){
-                e.preventDefault();
-                if (!dragging || dragging === row) return;
-                var rect = row.getBoundingClientRect();
-                var before = (e.clientY - rect.top) < rect.height / 2;
-                tbody.insertBefore(dragging, before ? row : row.nextSibling);
-              });
-              row.addEventListener("drop", function(e){ e.preventDefault(); L("drop sur", row.id); savePositions(tbody); });
-            });
-            L("repli HTML5 initialisé");
-          }
-
-          // Doit s\'exécuter APRÈS l\'init de tableDnD (qui tourne au DOM ready) pour pouvoir
-          // le reconfigurer : on attend l\'événement load (ou immédiat si déjà chargé).
-          if (document.readyState === "complete") { setup(); }
-          else { window.addEventListener("load", setup); }
-        }());
-        </script>';
+        return $this->fetchTemplate('dnd', [
+            'fpl_ajax_url' => self::$currentIndex . '&token=' . $this->token . '&ajax=1&action=UpdatePositions',
+            'fpl_table_id' => 'table-' . $this->table,
+            'fpl_tag' => 'FLL-DnD',
+        ]);
     }
 
     public function ajaxProcessUpdatePositions()
@@ -379,13 +299,7 @@ class AdminFreshapplinksLinkController extends ModuleAdminController
 
         $ajaxUrl = self::$currentIndex . '&token=' . $this->token . '&ajax=1&action=SearchTargets';
 
-        $targetTypeSelect = '<select name="target_type" id="fpl-target-type" class="form-control">';
-        foreach (['custom' => $this->l('URL libre'), 'product' => $this->l('Produit'), 'category' => $this->l('Catégorie'), 'cms' => $this->l('Page CMS')] as $val => $lbl) {
-            $targetTypeSelect .= '<option value="' . $val . '"' . ($val === $targetType ? ' selected' : '') . '>' . $lbl . '</option>';
-        }
-        $targetTypeSelect .= '</select>';
-
-        $customUrlFields = '';
+        $customUrls = [];
         foreach (Language::getLanguages(false) as $language) {
             $langId = (int) $language['id_lang'];
             $val = '';
@@ -396,192 +310,68 @@ class AdminFreshapplinksLinkController extends ModuleAdminController
                 );
                 $val = $row ? (string) $row['custom_url'] : '';
             }
-            $customUrlFields .= '
-            <div class="fpl-custom-url-field" style="margin-bottom:6px">
-              <span class="input-group-addon" style="display:inline-block;width:40px">' . strtoupper($language['iso_code']) . '</span>
-              <input type="text" name="custom_url_' . $langId . '" class="form-control" style="display:inline-block;width:calc(100% - 50px)" placeholder="https://..." value="' . htmlspecialchars($val, ENT_QUOTES) . '">
-            </div>';
+            $customUrls[] = ['id_lang' => $langId, 'iso' => (string) $language['iso_code'], 'value' => $val];
         }
 
-        $targetSearchBlock = '
-        <div class="form-group" id="fpl-target-search-wrap" style="' . ('custom' === $targetType ? 'display:none' : '') . '">
-          <label class="control-label col-lg-3">' . $this->l('Rechercher la cible') . '</label>
-          <div class="col-lg-9" style="position:relative">
-            <input type="text" id="fpl-target-search" class="form-control" autocomplete="off"
-                   placeholder="' . $this->l('Tapez pour rechercher...') . '" value="' . htmlspecialchars($targetName, ENT_QUOTES) . '">
-            <input type="hidden" name="target_id" id="fpl-target-id" value="' . $targetId . '">
-            <div id="fpl-target-results" style="position:absolute;z-index:100;background:#fff;border:1px solid #ddd;width:100%;max-height:220px;overflow:auto;display:none"></div>
-            <p class="help-block">' . $this->l('Sélectionnez un élément dans la liste proposée pendant la saisie.') . '</p>
-          </div>
-        </div>
-        <div class="form-group" id="fpl-target-custom-wrap" style="' . ('custom' !== $targetType ? 'display:none' : '') . '">
-          <label class="control-label col-lg-3">' . $this->l('URL (par langue)') . '</label>
-          <div class="col-lg-9">' . $customUrlFields . '</div>
-        </div>
-        <script>
-        (function(){
-          var typeSel = document.getElementById("fpl-target-type");
-          var searchWrap = document.getElementById("fpl-target-search-wrap");
-          var customWrap = document.getElementById("fpl-target-custom-wrap");
-          var searchInput = document.getElementById("fpl-target-search");
-          var idInput = document.getElementById("fpl-target-id");
-          var results = document.getElementById("fpl-target-results");
-          if (!typeSel) return;
+        $targetTypeField = $this->fetchTemplate('link-form-target', [
+            'fpl_target_type' => $targetType,
+            'fpl_types' => ['custom' => $this->l('URL libre'), 'product' => $this->l('Produit'), 'category' => $this->l('Catégorie'), 'cms' => $this->l('Page CMS')],
+            'fpl_t' => ['type' => $this->l('Type de cible')],
+        ]);
 
-          typeSel.addEventListener("change", function(){
-            if (typeSel.value === "custom") {
-              searchWrap.style.display = "none";
-              customWrap.style.display = "";
-            } else {
-              searchWrap.style.display = "";
-              customWrap.style.display = "none";
-              idInput.value = "";
-              searchInput.value = "";
-            }
-          });
+        $targetSearchBlock = $this->fetchTemplate('link-form-search', [
+            'fpl_target_type' => $targetType,
+            'fpl_target_id' => $targetId,
+            'fpl_target_name' => $targetName,
+            'fpl_ajax_url' => $ajaxUrl,
+            'fpl_urls' => $customUrls,
+            'fpl_t' => [
+                'search' => $this->l('Rechercher la cible'),
+                'search_placeholder' => $this->l('Tapez pour rechercher...'),
+                'search_help' => $this->l('Sélectionnez un élément dans la liste proposée pendant la saisie.'),
+                'urls' => $this->l('URL (par langue)'),
+            ],
+        ]);
 
-          var timer = null;
-          searchInput.addEventListener("input", function(){
-            idInput.value = "";
-            clearTimeout(timer);
-            var q = searchInput.value.trim();
-            if (q.length < 2) { results.style.display = "none"; return; }
-            timer = setTimeout(function(){
-              fetch("' . $ajaxUrl . '&target_type=" + encodeURIComponent(typeSel.value) + "&q=" + encodeURIComponent(q))
-                .then(function(r){ return r.json(); })
-                .then(function(data){
-                  results.innerHTML = "";
-                  if (!data.results || !data.results.length) { results.style.display = "none"; return; }
-                  data.results.forEach(function(item){
-                    var opt = document.createElement("div");
-                    opt.textContent = item.name;
-                    opt.style.padding = "6px 10px";
-                    opt.style.cursor = "pointer";
-                    opt.addEventListener("mouseenter", function(){ opt.style.background = "#f5f5f5"; });
-                    opt.addEventListener("mouseleave", function(){ opt.style.background = "#fff"; });
-                    opt.addEventListener("click", function(){
-                      searchInput.value = item.name;
-                      idInput.value = item.id;
-                      results.style.display = "none";
-                    });
-                    results.appendChild(opt);
-                  });
-                  results.style.display = "";
-                });
-            }, 250);
-          });
-
-          document.addEventListener("click", function(e){
-            if (e.target !== searchInput) { results.style.display = "none"; }
-          });
-        }());
-        </script>';
-
-        $hintLength = $this->l('Valeur CSS avec unité : rem, px, em ou %. Ex : 1rem, 16px.');
-        $hintHex = $this->l('Format hexadécimal #RRGGBB ou #RGB. Vide = hérite du style de la liste.');
-        $hintIconImage = $this->l('Formats acceptés : SVG, PNG, JPG, WEBP. Une image prime sur une icône du sprite si les deux sont renseignées.');
-
-        $fwSel = static function (string $cur): string {
-            $opts = '<option value=""' . ('' === $cur ? ' selected' : '') . '>— hérite de la liste —</option>';
-            foreach ([100, 200, 300, 400, 500, 600, 700, 800, 900] as $w) {
-                $opts .= '<option value="' . $w . '"' . ((string) $w === $cur ? ' selected' : '') . '>' . $w . '</option>';
-            }
-
-            return $opts;
-        };
-        $ttSel = static function (string $cur): string {
-            $opts = '<option value=""' . ('' === $cur ? ' selected' : '') . '>— hérite de la liste —</option>';
-            foreach (['none' => 'None', 'uppercase' => 'UPPERCASE', 'lowercase' => 'lowercase', 'capitalize' => 'Capitalize'] as $val => $label) {
-                $opts .= '<option value="' . $val . '"' . ($val === $cur ? ' selected' : '') . '>' . $label . '</option>';
-            }
-
-            return $opts;
-        };
-        $colorField = static function (string $name, string $label, string $cur) use ($hintHex): string {
-            return '
-          <div class="col-sm-3">
-            <div class="form-group">
-              <label>' . $label . '</label>
-              <div style="display:flex;align-items:center;gap:8px">
-                <input type="color" class="fpl-ov-color-input" data-pair="' . $name . '_text"
-                       value="' . htmlspecialchars($cur ?: '#000000', ENT_QUOTES) . '"
-                       style="width:48px;height:34px;padding:2px 4px;cursor:pointer">
-                <input type="text" class="form-control" name="' . $name . '_text"
-                       value="' . htmlspecialchars($cur, ENT_QUOTES) . '"
-                       placeholder="vide = liste" style="width:120px" maxlength="7">
-              </div>
-              <p class="help-block">' . $hintHex . '</p>
-            </div>
-          </div>';
-        };
-
+        $inherit = '— ' . $this->l('hérite de la liste') . ' —';
+        $weights = ['' => $inherit];
+        foreach ([100, 200, 300, 400, 500, 600, 700, 800, 900] as $w) {
+            $weights[(string) $w] = (string) $w;
+        }
         $iconImage = $ovGet($ov, 'icon_image') ?: (string) ($link->icon_image ?? '');
 
-        $iconBlock = '
-        <hr>
-        <p class="text-muted"><strong>' . $this->l('Icône') . '</strong></p>
-        <div class="row">
-          <div class="col-sm-4">
-            <div class="form-group">
-              <label>' . $this->l('Icône — nom dans le jeu embarqué') . '</label>
-              <input type="text" name="icon_class" class="form-control" list="fa-module-icons" placeholder="icon-arrow-right" value="' . htmlspecialchars($link->icon_class ?? '', ENT_QUOTES) . '">
-              ' . $this->iconDatalist() . '
-              <p class="help-block">' . $this->l('Icônes fournies par le module, indépendantes du thème : commencez à taper pour voir la liste.') . '</p>
-            </div>
-          </div>
-          <div class="col-sm-4">
-            <div class="form-group">
-              <label>' . $this->l('Icône — image') . '</label>
-              ' . ($iconImage ? '<p><img src="' . htmlspecialchars($this->module->_path . $iconImage, ENT_QUOTES) . '" alt="" style="max-height:24px"></p>' : '') . '
-              <input type="file" name="icon_image" accept=".svg,.png,.jpg,.jpeg,.webp">
-              <p class="help-block">' . $hintIconImage . '</p>
-            </div>
-          </div>
-        </div>
-        <p class="text-muted" style="margin-top:15px"><strong>' . $this->l('Style de ce lien (vide = hérite du style par défaut de la liste)') . '</strong></p>
-        <div class="row">
-          ' . $colorField('icon_color', $this->l('Couleur icône'), $ovGet($ov, 'icon_color')) . '
-          ' . $colorField('link_color', $this->l('Couleur lien'), $ovGet($ov, 'link_color')) . '
-          <div class="col-sm-3">
-            <div class="form-group">
-              <label>' . $this->l('Graisse') . '</label>
-              <select name="font_weight" class="form-control">' . $fwSel($ovGet($ov, 'font_weight')) . '</select>
-            </div>
-          </div>
-          <div class="col-sm-3">
-            <div class="form-group">
-              <label>' . $this->l('Transformation') . '</label>
-              <select name="text_transform" class="form-control">' . $ttSel($ovGet($ov, 'text_transform')) . '</select>
-            </div>
-          </div>
-        </div>
-        <div class="row">
-          <div class="col-sm-3">
-            <div class="form-group">
-              <label>' . $this->l('Famille de police') . '</label>
-              <input type="text" name="font_family" class="form-control" placeholder="' . $this->l('vide = liste') . '" value="' . htmlspecialchars($ovGet($ov, 'font_family'), ENT_QUOTES) . '">
-            </div>
-          </div>
-          <div class="col-sm-3">
-            <div class="form-group">
-              <label>' . $this->l('Taille de police') . '</label>
-              <input type="text" name="font_size" class="form-control" placeholder="' . $this->l('vide = liste') . '" value="' . htmlspecialchars($ovGet($ov, 'font_size'), ENT_QUOTES) . '">
-              <p class="help-block">' . $hintLength . '</p>
-            </div>
-          </div>
-        </div>
-        <script>
-        (function(){
-          document.querySelectorAll(".fpl-ov-color-input").forEach(function(color){
-            var text = document.querySelector(\'[name="\' + color.getAttribute("data-pair") + \'"]\');
-            if (!text) return;
-            color.addEventListener("input", function(){ text.value = color.value; });
-            text.addEventListener("input", function(){
-              if (/^#[0-9a-fA-F]{3,6}$/.test(text.value)) { color.value = text.value; }
-            });
-          });
-        }());
-        </script>';
+        $iconBlock = $this->fetchTemplate('link-form-icon', [
+            'fpl_icon_class' => (string) ($link->icon_class ?? ''),
+            'fpl_icon_names' => $this->module->getIconNames(),
+            'fpl_icon_image_url' => $iconImage ? $this->module->getPathUri() . $iconImage : '',
+            'fpl_colors' => [
+                ['name' => 'icon_color_text', 'label' => $this->l('Couleur icône'), 'value' => $ovGet($ov, 'icon_color')],
+                ['name' => 'link_color_text', 'label' => $this->l('Couleur lien'), 'value' => $ovGet($ov, 'link_color')],
+            ],
+            'fpl_weights' => $weights,
+            'fpl_transforms' => ['' => $inherit, 'none' => 'None', 'uppercase' => 'UPPERCASE', 'lowercase' => 'lowercase', 'capitalize' => 'Capitalize'],
+            'fpl_ov' => [
+                'font_weight' => $ovGet($ov, 'font_weight'),
+                'text_transform' => $ovGet($ov, 'text_transform'),
+                'font_family' => $ovGet($ov, 'font_family'),
+                'font_size' => $ovGet($ov, 'font_size'),
+            ],
+            'fpl_t' => [
+                'icon' => $this->l('Icône'),
+                'icon_name' => $this->l('Icône — nom dans le jeu embarqué'),
+                'icon_name_help' => $this->l('Icônes fournies par le module, indépendantes du thème : commencez à taper pour voir la liste.'),
+                'icon_image' => $this->l('Icône — image'),
+                'icon_image_help' => $this->l('Formats acceptés : SVG, PNG, JPG, WEBP. Une image prime sur une icône du sprite si les deux sont renseignées.'),
+                'style_intro' => $this->l('Style de ce lien (vide = hérite du style par défaut de la liste)'),
+                'hex_help' => $this->l('Format hexadécimal #RRGGBB ou #RGB. Vide = hérite du style de la liste.'),
+                'weight' => $this->l('Graisse'),
+                'transform' => $this->l('Transformation'),
+                'family' => $this->l('Famille de police'),
+                'size' => $this->l('Taille de police'),
+                'size_help' => $this->l('Valeur CSS avec unité : rem, px, em ou %. Ex : 1rem, 16px.'),
+                'inherit' => $this->l('vide = liste'),
+            ],
+        ]);
 
         $this->fields_form = [
             'legend' => [
@@ -599,11 +389,7 @@ class AdminFreshapplinksLinkController extends ModuleAdminController
                 [
                     'type' => 'html',
                     'name' => 'fpl_target_type_html',
-                    'html_content' => '
-        <div class="form-group">
-          <label class="control-label col-lg-3">' . $this->l('Type de cible') . '</label>
-          <div class="col-lg-9">' . $targetTypeSelect . '</div>
-        </div>',
+                    'html_content' => $targetTypeField,
                 ],
                 [
                     'type' => 'html',
@@ -760,18 +546,6 @@ class AdminFreshapplinksLinkController extends ModuleAdminController
     {
         parent::setMedia($isNewTheme);
         $this->addCSS('modules/' . $this->module->name . '/views/css/back.css');
-    }
-
-    /**
-     * Suggestions du champ « icône » : les identifiants du sprite embarqué dans le module.
-     */
-    private function iconDatalist(): string
-    {
-        $options = '';
-        foreach ($this->module->getIconNames() as $name) {
-            $options .= '<option value="' . htmlspecialchars($name, ENT_QUOTES) . '"></option>';
-        }
-
-        return '<datalist id="fa-module-icons">' . $options . '</datalist>';
+        $this->addJS(_MODULE_DIR_ . $this->module->name . '/views/js/admin.js');
     }
 }

@@ -51,24 +51,64 @@ class AdminFreshapplinksController extends ModuleAdminController
         return preg_match('/^\d*\.?\d+(rem|px|em|%)$/', $raw) ? $raw : '';
     }
 
-    private function fontWeightOptions(string $cur): string
+    /** @return array<string, string> choix de graisse, la valeur vide héritant du thème */
+    private function fontWeightOptions(): array
     {
-        $opts = '<option value=""' . ('' === $cur ? ' selected' : '') . '>— ' . $this->l('normal (400)') . ' —</option>';
+        $options = ['' => '— ' . $this->l('normal (400)') . ' —'];
         foreach ([100, 200, 300, 400, 500, 600, 700, 800, 900] as $w) {
-            $opts .= '<option value="' . $w . '"' . ((string) $w === $cur ? ' selected' : '') . '>' . $w . '</option>';
+            $options[(string) $w] = (string) $w;
         }
 
-        return $opts;
+        return $options;
     }
 
-    private function textTransformOptions(string $cur): string
+    /** @return array<string, string> */
+    private function textTransformOptions(): array
     {
-        $opts = '<option value=""' . ('' === $cur ? ' selected' : '') . '>— ' . $this->l('aucune') . ' —</option>';
-        foreach (['none' => 'None', 'uppercase' => 'UPPERCASE', 'lowercase' => 'lowercase', 'capitalize' => 'Capitalize'] as $val => $label) {
-            $opts .= '<option value="' . $val . '"' . ($val === $cur ? ' selected' : '') . '>' . $label . '</option>';
+        return ['' => '— ' . $this->l('aucune') . ' —', 'none' => 'None', 'uppercase' => 'UPPERCASE', 'lowercase' => 'lowercase', 'capitalize' => 'Capitalize'];
+    }
+
+    /**
+     * Module::l() rend un texte déjà échappé pour le HTML, alors que les gabarits échappent à
+     * l'affichage : les libellés traduits sont ramenés à du texte brut pour ne pas l'être deux
+     * fois. Seules les clés portant des libellés sont concernées, jamais les saisies.
+     */
+    public static function decodeLabels(array $vars): array
+    {
+        foreach (['fpl_t', 'fpl_types', 'fpl_weights', 'fpl_transforms', 'fpl_label'] as $key) {
+            if (isset($vars[$key])) {
+                $vars[$key] = is_array($vars[$key])
+                    ? array_map([self::class, 'decode'], $vars[$key])
+                    : self::decode($vars[$key]);
+            }
+        }
+        if (isset($vars['fpl_colors'])) {
+            foreach ($vars['fpl_colors'] as $i => $color) {
+                $vars['fpl_colors'][$i]['label'] = self::decode($color['label']);
+            }
         }
 
-        return $opts;
+        return $vars;
+    }
+
+    private static function decode($value): string
+    {
+        return html_entity_decode((string) $value, ENT_QUOTES, 'UTF-8');
+    }
+
+    /** Rendu d'un gabarit de views/templates/admin. */
+    private function fetchTemplate(string $name, array $vars): string
+    {
+        return self::renderTemplate($name, $vars);
+    }
+
+    private static function renderTemplate(string $name, array $vars): string
+    {
+        $vars = self::decodeLabels($vars);
+        $smarty = Context::getContext()->smarty;
+        $smarty->assign($vars);
+
+        return $smarty->fetch(_PS_MODULE_DIR_ . 'freshapplinks/views/templates/admin/' . $name . '.tpl');
     }
 
     public function renderList()
@@ -106,126 +146,24 @@ class AdminFreshapplinksController extends ModuleAdminController
         $idTab = (int) Tab::getIdFromClassName('AdminFreshapplinks');
         $checked = $idTab && (new Tab($idTab))->active;
 
-        return '
-        <div class="panel" style="display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:12px 20px;">
-          <span>' . $this->l('Afficher dans le menu du backoffice') . '</span>
-          <form method="post" style="margin:0">
-            <input type="hidden" name="submitFreshappBoMenuVisibility" value="1">
-            <span class="switch prestashop-switch fixed-width-lg">
-              <input type="radio" name="bo_menu_visible" id="bo_menu_visible_on" value="1"' . ($checked ? ' checked="checked"' : '') . ' onchange="this.form.submit()">
-              <label for="bo_menu_visible_on" class="radioCheck">' . $this->l('Oui') . '</label>
-              <input type="radio" name="bo_menu_visible" id="bo_menu_visible_off" value="0"' . (!$checked ? ' checked="checked"' : '') . ' onchange="this.form.submit()">
-              <label for="bo_menu_visible_off" class="radioCheck">' . $this->l('Non') . '</label>
-              <a class="slide-button btn"></a>
-            </span>
-          </form>
-        </div>';
+        return $this->fetchTemplate('menu-visibility', [
+            'fpl_checked' => $checked,
+            'fpl_t' => ['label' => $this->l('Afficher dans le menu du backoffice'), 'yes' => $this->l('Oui'), 'no' => $this->l('Non')],
+        ]);
     }
 
     /**
-     * Le drag & drop natif de HelperList de PS9 ('position' => 'position') ne persiste pas sur
-     * cette install par défaut. La page charge aussi automatiquement le `js/admin/dnd.js` du core
-     * PrestaShop (déclenché par `orderBy=position`), qui auto-initialise jQuery `tableDnD` sur
-     * cette même table avec `dragHandle: "dragHandle"` (lié à la cellule icône
-     * `<td class="dragHandle">`, pas au `<tr>`) et son propre `onDrop` — mais cet `onDrop` du core
-     * poste un format de payload (`action=updatePositions&id=X&way=Y`) que notre
-     * `ajaxProcessUpdatePositions()` surchargé ci-dessous ne comprend pas, donc il ne fait
-     * silencieusement rien. Plutôt que de lutter contre `tableDnD` (le drag-and-drop HTML5 natif
-     * sur `<tr>` a été testé et ne déclenche jamais `dragstart` sur cette install — un autre
-     * script intercepte le mousedown en premier), on RÉUTILISE le plugin : on purge le listener
-     * du core de l'élément réel auquel il est lié (`.dragHandle`, pas la ligne) et on réinitialise
-     * avec notre propre `onDrop` qui sauvegarde le nouvel ordre. `dragHandle: "dragHandle"` sur
-     * NOTRE réinit aussi, pour qu'un clic tombant sur le glyphe de l'icône lui-même (pas juste le
-     * fond du `<td>`) démarre quand même le drag. Voir
-     * `AdminThemeconfigurationController::renderDragDropScript()` pour l'implémentation de
-     * référence dont ceci a été porté (vérifiée de bout en bout via une vraie session BO
-     * Playwright).
+     * Le glisser-déposer natif de HelperList ne persiste pas l'ordre (le format posté par le
+     * core ne correspond pas à ajaxProcessUpdatePositions()). views/js/admin.js reprend la main
+     * sur la table désignée ici ; le détail est commenté dans ce fichier.
      */
     private function renderDragDropScript(): string
     {
-        $ajaxUrl = self::$currentIndex . '&token=' . $this->token . '&ajax=1&action=UpdatePositions';
-
-        return '
-        <script>
-        (function(){
-          var TAG = "[FL-DnD]";
-          function L(){ try { console.log.apply(console, [TAG].concat([].slice.call(arguments))); } catch(e){} }
-          var ajaxUrl = ' . json_encode($ajaxUrl) . ';
-
-          function ridOf(tr){
-            // Ligne HelperList native : id="tr_{groupe}_{id}_{position}" → l\'id de
-            // l\'enregistrement est l\'avant-dernier segment (le dernier = la position).
-            var parts = (tr.id || "").split("_");
-            return parts[parts.length - 2];
-          }
-
-          function savePositions(tbody){
-            var ids = [];
-            tbody.querySelectorAll("tr").forEach(function(tr){
-              var rid = ridOf(tr);
-              if (rid) ids.push(rid);
-            });
-            L("savePositions -> ids (nouvel ordre) =", ids.join(","));
-            var body = new URLSearchParams();
-            body.set("positions", ids.join(","));
-            fetch(ajaxUrl, { method: "POST", body: body, credentials: "same-origin" })
-              .then(function(r){ L("réponse HTTP", r.status); return r.text(); })
-              .then(function(t){ L("corps réponse =", t); })
-              .catch(function(err){ L("ERREUR fetch =", err); });
-          }
-
-          function setup(){
-            var table = document.getElementById("table-' . $this->table . '");
-            var tbody = table ? table.querySelector("tbody") : null;
-            if (!table) { L("ERREUR: table introuvable"); return; }
-            if (!tbody) { L("ERREUR: tbody introuvable"); return; }
-            L("setup, nb lignes =", tbody.querySelectorAll("tr").length, "| ajaxUrl =", ajaxUrl);
-
-            var $ = window.jQuery;
-
-            if ($ && $.fn && typeof $.fn.tableDnD === "function") {
-              $(table).find("tbody tr").off("mousedown");
-              $(table).find(".dragHandle").off("mousedown");
-              $(table).tableDnD({
-                dragHandle: "dragHandle",
-                onDrop: function(t){
-                  L("onDrop tableDnD");
-                  savePositions(t.querySelector("tbody") || tbody);
-                }
-              });
-              L("OK: tableDnD ré-initialisé avec onDrop -> sauvegarde (dragHandle core purgé)");
-              return;
-            }
-
-            // Repli si tableDnD indisponible : drag & drop HTML5 natif.
-            L("tableDnD indisponible -> repli HTML5 natif");
-            var dragging = null;
-            tbody.querySelectorAll("tr").forEach(function(row){
-              row.setAttribute("draggable", "true");
-              row.style.cursor = "move";
-              row.addEventListener("dragstart", function(e){
-                dragging = row; row.style.opacity = "0.4"; L("dragstart", row.id);
-                if (e.dataTransfer) { e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", row.id || ""); } catch (err) {} }
-              });
-              row.addEventListener("dragend", function(){ row.style.opacity = ""; dragging = null; });
-              row.addEventListener("dragover", function(e){
-                e.preventDefault();
-                if (!dragging || dragging === row) return;
-                var rect = row.getBoundingClientRect();
-                var before = (e.clientY - rect.top) < rect.height / 2;
-                tbody.insertBefore(dragging, before ? row : row.nextSibling);
-              });
-              row.addEventListener("drop", function(e){ e.preventDefault(); L("drop sur", row.id); savePositions(tbody); });
-            });
-            L("repli HTML5 initialisé");
-          }
-
-          // Doit s\'exécuter APRÈS l\'init de tableDnD (qui tourne au DOM ready) pour pouvoir
-          // le reconfigurer : on attend l\'événement load (ou immédiat si déjà chargé).
-          if (document.readyState === "complete") { setup(); }
-          else { window.addEventListener("load", setup); }
-        }());
-        </script>';
+        return $this->fetchTemplate('dnd', [
+            'fpl_ajax_url' => self::$currentIndex . '&token=' . $this->token . '&ajax=1&action=UpdatePositions',
+            'fpl_table_id' => 'table-' . $this->table,
+            'fpl_tag' => 'FL-DnD',
+        ]);
     }
 
     public function ajaxProcessUpdatePositions()
@@ -243,14 +181,9 @@ class AdminFreshapplinksController extends ModuleAdminController
     /** Colonne "Hooks" : affiche les hooks ciblés en badges lisibles. */
     public static function renderHooksList($value, $row)
     {
-        $hooks = array_filter(array_map('trim', explode(',', (string) $value)));
-        if (empty($hooks)) {
-            return '<span class="text-muted">—</span>';
-        }
-
-        return implode(' ', array_map(static function (string $h): string {
-            return '<span class="label label-default">' . htmlspecialchars($h, ENT_QUOTES) . '</span>';
-        }, $hooks));
+        return self::renderTemplate('list-hooks', [
+            'fpl_hooks' => array_values(array_filter(array_map('trim', explode(',', (string) $value)))),
+        ]);
     }
 
     /** Colonne "Liens" : nombre de liens + lien direct vers leur gestion. */
@@ -259,8 +192,7 @@ class AdminFreshapplinksController extends ModuleAdminController
         $url = Context::getContext()->link->getAdminLink('AdminFreshapplinksLink')
             . '&id_freshapplinks_list=' . (int) $row['id_freshapplinks_list'];
 
-        return '<a href="' . $url . '" class="btn btn-default btn-xs">'
-            . '<i class="icon-link"></i> ' . (int) $value . '</a>';
+        return self::renderTemplate('list-links', ['fpl_url' => $url, 'fpl_count' => (int) $value]);
     }
 
     public function renderForm()
@@ -268,120 +200,67 @@ class AdminFreshapplinksController extends ModuleAdminController
         $id = (int) Tools::getValue($this->identifier);
         $list = $id ? new FreshapplinksList($id) : null;
 
-        $hooksTable = '
-        <div class="form-group">
-          <label class="control-label col-lg-3">' . $this->l('Hooks ciblés') . '</label>
-          <div class="col-lg-9">';
+        $selectedHooks = $list ? array_filter(array_map('trim', explode(',', (string) $list->hooks))) : [];
+        $hooks = [];
         foreach (Freshapplinks::AVAILABLE_HOOKS as $hook) {
-            $checked = $list && in_array($hook, array_filter(array_map('trim', explode(',', (string) $list->hooks))), true);
-            $hooksTable .= '
-            <label class="checkbox-inline" style="margin-right:20px">
-              <input type="checkbox" name="hooks[]" value="' . $hook . '"' . ($checked ? ' checked' : '') . '> ' . $hook . '
-            </label>';
+            $hooks[] = ['name' => $hook, 'checked' => in_array($hook, $selectedHooks, true)];
         }
-        $hooksTable .= '
-            <p class="help-block">' . $this->l('Cette liste sera affichée sur chacun des hooks cochés. Aucune case cochée = liste inactive côté front.') . '</p>
-          </div>
-        </div>';
+        $hooksTable = $this->fetchTemplate('list-form-hooks', [
+            'fpl_hooks' => $hooks,
+            'fpl_t' => [
+                'label' => $this->l('Hooks ciblés'),
+                'help' => $this->l('Cette liste sera affichée sur chacun des hooks cochés. Aucune case cochée = liste inactive côté front.'),
+            ],
+        ]);
 
-        $layout = $list->layout ?? 'column';
-        $showTitle = $list ? (bool) $list->show_title : true;
-        $layoutField = '
-        <div class="form-group">
-          <label class="control-label col-lg-3">' . $this->l('Affichage') . '</label>
-          <div class="col-lg-9">
-            <select name="layout" class="form-control" style="width:auto;display:inline-block">
-              <option value="column"' . ('column' === $layout ? ' selected' : '') . '>' . $this->l('En colonne (liens empilés)') . '</option>
-              <option value="row"' . ('row' === $layout ? ' selected' : '') . '>' . $this->l('En ligne (liens côte à côte)') . '</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="control-label col-lg-3">' . $this->l('Afficher le titre') . '</label>
-          <div class="col-lg-9">
-            <span class="switch prestashop-switch fixed-width-lg">
-              <input type="radio" name="show_title" id="show_title_on" value="1"' . ($showTitle ? ' checked' : '') . '>
-              <label for="show_title_on">' . $this->l('Oui') . '</label>
-              <input type="radio" name="show_title" id="show_title_off" value="0"' . (!$showTitle ? ' checked' : '') . '>
-              <label for="show_title_off">' . $this->l('Non') . '</label>
-              <a class="slide-button btn"></a>
-            </span>
-            <p class="help-block">' . $this->l('Si désactivé, le champ "Nom" ci-dessus reste utilisé en interne (BO) mais n\'est pas affiché au-dessus des liens côté front.') . '</p>
-          </div>
-        </div>';
+        $layoutField = $this->fetchTemplate('list-form-layout', [
+            'fpl_layout' => $list->layout ?? 'column',
+            'fpl_show_title' => $list ? (bool) $list->show_title : true,
+            'fpl_t' => [
+                'display' => $this->l('Affichage'),
+                'column' => $this->l('En colonne (liens empilés)'),
+                'row' => $this->l('En ligne (liens côte à côte)'),
+                'show_title' => $this->l('Afficher le titre'),
+                'yes' => $this->l('Oui'),
+                'no' => $this->l('Non'),
+                'show_title_help' => $this->l('Si désactivé, le champ "Nom" ci-dessus reste utilisé en interne (BO) mais n\'est pas affiché au-dessus des liens côté front.'),
+            ],
+        ]);
 
-        $hintLength = $this->l('Valeur CSS avec unité : rem, px, em ou %. Ex : 1rem, 16px.');
-
-        $styleTable = '
-        <hr>
-        <p class="text-muted"><strong>' . $this->l('Style par défaut des liens de cette liste (vide = hérite du thème, chaque lien peut surcharger individuellement)') . '</strong></p>
-        <div class="row">
-          <div class="col-sm-3">
-            <div class="form-group">
-              <label>' . $this->l('Couleur icône') . '</label><br>
-              <input type="color" class="fpl-color-input" data-pair="icon_color_text" value="' . htmlspecialchars($list->icon_color ?? '' ?: '#000000', ENT_QUOTES) . '" style="width:48px;height:34px">
-              <input type="text" name="icon_color" id="fpl-icon-color-hex" value="' . htmlspecialchars($list->icon_color ?? '', ENT_QUOTES) . '" placeholder="vide" class="form-control" style="width:110px;display:inline-block;margin-left:6px" maxlength="7">
-            </div>
-          </div>
-          <div class="col-sm-3">
-            <div class="form-group">
-              <label>' . $this->l('Couleur lien') . '</label><br>
-              <input type="color" class="fpl-color-input" data-pair="link_color_text" value="' . htmlspecialchars($list->link_color ?? '' ?: '#000000', ENT_QUOTES) . '" style="width:48px;height:34px">
-              <input type="text" name="link_color" id="fpl-link-color-hex" value="' . htmlspecialchars($list->link_color ?? '', ENT_QUOTES) . '" placeholder="vide" class="form-control" style="width:110px;display:inline-block;margin-left:6px" maxlength="7">
-            </div>
-          </div>
-          <div class="col-sm-3">
-            <div class="form-group">
-              <label>' . $this->l('Graisse') . '</label>
-              <select name="font_weight" class="form-control">' . $this->fontWeightOptions((string) ($list->font_weight ?? '')) . '</select>
-            </div>
-          </div>
-          <div class="col-sm-3">
-            <div class="form-group">
-              <label>' . $this->l('Transformation') . '</label>
-              <select name="text_transform" class="form-control">' . $this->textTransformOptions((string) ($list->text_transform ?? '')) . '</select>
-            </div>
-          </div>
-        </div>
-        <div class="row">
-          <div class="col-sm-3">
-            <div class="form-group">
-              <label>' . $this->l('Famille de police') . '</label>
-              <input type="text" name="font_family" class="form-control" placeholder="' . $this->l('vide = police du thème') . '" value="' . htmlspecialchars($list->font_family ?? '', ENT_QUOTES) . '">
-              <p class="help-block">' . $this->l('Ex : "Poppins", sans-serif') . '</p>
-            </div>
-          </div>
-          <div class="col-sm-3">
-            <div class="form-group">
-              <label>' . $this->l('Taille de police') . '</label>
-              <input type="text" name="font_size" class="form-control" placeholder="' . $this->l('vide') . '" value="' . htmlspecialchars($list->font_size ?? '', ENT_QUOTES) . '">
-              <p class="help-block">' . $hintLength . '</p>
-            </div>
-          </div>
-        </div>
-        <script>
-        (function(){
-          document.querySelectorAll(".fpl-color-input").forEach(function(color){
-            var text = document.querySelector(\'[name="\' + color.getAttribute("data-pair").replace("_text", "") + \'"]\');
-            if (!text) return;
-            color.addEventListener("input", function(){ text.value = color.value; });
-            text.addEventListener("input", function(){
-              if (/^#[0-9a-fA-F]{3,6}$/.test(text.value)) { color.value = text.value; }
-            });
-          });
-        }());
-        </script>';
+        $styleTable = $this->fetchTemplate('list-form-style', [
+            'fpl_list' => [
+                'icon_color' => (string) ($list->icon_color ?? ''),
+                'link_color' => (string) ($list->link_color ?? ''),
+                'font_weight' => (string) ($list->font_weight ?? ''),
+                'text_transform' => (string) ($list->text_transform ?? ''),
+                'font_family' => (string) ($list->font_family ?? ''),
+                'font_size' => (string) ($list->font_size ?? ''),
+            ],
+            'fpl_weights' => $this->fontWeightOptions(),
+            'fpl_transforms' => $this->textTransformOptions(),
+            'fpl_t' => [
+                'intro' => $this->l('Style par défaut des liens de cette liste (vide = hérite du thème, chaque lien peut surcharger individuellement)'),
+                'icon_color' => $this->l('Couleur icône'),
+                'link_color' => $this->l('Couleur lien'),
+                'weight' => $this->l('Graisse'),
+                'transform' => $this->l('Transformation'),
+                'family' => $this->l('Famille de police'),
+                'family_placeholder' => $this->l('vide = police du thème'),
+                'family_help' => $this->l('Ex : "Poppins", sans-serif'),
+                'size' => $this->l('Taille de police'),
+                'size_help' => $this->l('Valeur CSS avec unité : rem, px, em ou %. Ex : 1rem, 16px.'),
+                'empty' => $this->l('vide'),
+            ],
+        ]);
 
         $manageLinksBtn = '';
         if ($list && $list->id) {
-            $linkUrl = Context::getContext()->link->getAdminLink('AdminFreshapplinksLink') . '&id_freshapplinks_list=' . (int) $list->id;
-            $manageLinksBtn = '
-        <div class="form-group">
-          <label class="control-label col-lg-3"></label>
-          <div class="col-lg-9">
-            <a href="' . $linkUrl . '" class="btn btn-default"><i class="icon-link"></i> ' . $this->l('Gérer les liens de cette liste') . '</a>
-          </div>
-        </div>';
+            $manageLinksBtn = $this->fetchTemplate('button-link', [
+                'fpl_form_group' => true,
+                'fpl_url' => Context::getContext()->link->getAdminLink('AdminFreshapplinksLink') . '&id_freshapplinks_list=' . (int) $list->id,
+                'fpl_icon' => 'icon-link',
+                'fpl_label' => $this->l('Gérer les liens de cette liste'),
+            ]);
         }
 
         $this->fields_form = [
@@ -498,5 +377,6 @@ class AdminFreshapplinksController extends ModuleAdminController
     {
         parent::setMedia($isNewTheme);
         $this->addCSS('modules/' . $this->module->name . '/views/css/back.css');
+        $this->addJS(_MODULE_DIR_ . $this->module->name . '/views/js/admin.js');
     }
 }

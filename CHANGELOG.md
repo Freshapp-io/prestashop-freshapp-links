@@ -4,6 +4,10 @@ Une section par version, la plus récente en haut. Chaque puce est une ligne aut
 formulée côté marchand : le bloc d'une version se colle tel quel dans le champ
 « changelog » de freshappprestadownload (une ligne par changement, sans le tiret).
 
+## 1.1.1 — 2026-09-18
+
+- Améliorations techniques de l'administration pour la conformité PrestaShop Addons.
+
 ## 1.1.0 — 2026-09-17
 
 - Le module devient FreshApp Links.
