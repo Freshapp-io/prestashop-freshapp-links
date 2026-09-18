@@ -41,11 +41,17 @@ class Freshapplinks extends Module
         'displayBeforeBodyClosingTag',
     ];
 
+    /** Boutique de démonstration : constante _FA_DEMO_MODE_ définie par l'instance. */
+    public static function isDemoMode(): bool
+    {
+        return defined('_FA_DEMO_MODE_') && (bool) constant('_FA_DEMO_MODE_');
+    }
+
     public function __construct()
     {
         $this->name = 'freshapplinks';
         $this->tab = 'front_office_features';
-        $this->version = '1.1.2';
+        $this->version = '1.1.3';
         $this->author = 'FreshApp.io';
         $this->need_instance = 0;
         $this->bootstrap = true;

@@ -145,6 +145,8 @@ class AdminFreshapplinksController extends ModuleAdminController
     {
         $idTab = (int) Tab::getIdFromClassName('AdminFreshapplinks');
         $checked = $idTab && (new Tab($idTab))->active;
+        // Démonstration : l'interrupteur de menu est grisé (refusé aussi côté serveur).
+        $this->context->smarty->assign('fa_menu_demo', Freshapplinks::isDemoMode());
 
         return $this->fetchTemplate('menu-visibility', [
             'fpl_checked' => $checked,
@@ -323,7 +325,7 @@ class AdminFreshapplinksController extends ModuleAdminController
 
     public function postProcess()
     {
-        if (Tools::isSubmit('submitFreshappBoMenuVisibility')) {
+        if (Tools::isSubmit('submitFreshappBoMenuVisibility') && !Freshapplinks::isDemoMode()) {
             $idTab = (int) Tab::getIdFromClassName('AdminFreshapplinks');
             if ($idTab) {
                 $tab = new Tab($idTab);
