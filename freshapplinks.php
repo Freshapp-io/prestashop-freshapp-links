@@ -45,7 +45,7 @@ class Freshapplinks extends Module
     {
         $this->name = 'freshapplinks';
         $this->tab = 'front_office_features';
-        $this->version = '1.1.1';
+        $this->version = '1.1.2';
         $this->author = 'FreshApp.io';
         $this->need_instance = 0;
         $this->bootstrap = true;
@@ -97,7 +97,7 @@ class Freshapplinks extends Module
 
     protected function installTabs(): bool
     {
-        $idList = $this->addTab(self::TAB_LIST_CLASS, 'FreshApp Links', (int) Tab::getIdFromClassName('AdminParentThemes'));
+        $idList = $this->addTab(self::TAB_LIST_CLASS, 'FS Links', (int) Tab::getIdFromClassName('AdminParentModulesSf'));
         if (!$idList) {
             return false;
         }

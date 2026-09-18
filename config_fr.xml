@@ -2,7 +2,7 @@
 <module>
     <name>freshapplinks</name>
     <displayName><![CDATA[FreshApp Links]]></displayName>
-    <version><![CDATA[1.1.1]]></version>
+    <version><![CDATA[1.1.2]]></version>
     <description><![CDATA[Listes de liens configurables (produit, cat&eacute;gorie, page CMS ou URL libre) affichables sur un ou plusieurs hooks, avec ic&ocirc;ne et style personnalisables.]]></description>
     <author><![CDATA[FreshApp.io]]></author>
     <tab><![CDATA[front_office_features]]></tab>
