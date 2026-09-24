@@ -51,7 +51,7 @@ class Freshapplinks extends Module
     {
         $this->name = 'freshapplinks';
         $this->tab = 'front_office_features';
-        $this->version = '1.1.4';
+        $this->version = '1.1.5';
         $this->author = 'FreshApp.io';
         $this->need_instance = 0;
         $this->bootstrap = true;
@@ -83,18 +83,6 @@ class Freshapplinks extends Module
         $ok = $this->uninstallTabs() && $ok;
 
         return parent::uninstall() && $ok;
-    }
-
-    public function reset()
-    {
-        if (!$this->uninstallSql()) {
-            return false;
-        }
-        if (!$this->installSql()) {
-            return false;
-        }
-
-        return parent::reset();
     }
 
     /* ------------------------------------------------------------------ */
@@ -139,7 +127,7 @@ class Freshapplinks extends Module
         // juste absent de l'arbre de navigation. Voir AdminFreshapplinksController pour la case
         // qui bascule ça (seulement sur l'onglet liste parent — le masquer masque aussi l'enfant
         // "Liens" de l'arbre de navigation).
-        $tab->active = 0;
+        $tab->active = false;
 
         return $tab->add() ? (int) $tab->id : 0;
     }

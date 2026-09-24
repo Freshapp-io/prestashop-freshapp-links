@@ -4,6 +4,10 @@ Une section par version, la plus récente en haut. Chaque puce est une ligne aut
 formulée côté marchand : le bloc d'une version se colle tel quel dans le champ
 « changelog » de freshappprestadownload (une ligne par changement, sans le tiret).
 
+## 1.1.5 — 2026-09-24
+
+- Correction : l'option « Réinitialiser » du gestionnaire de modules, en conservant les données, échouait après avoir vidé les listes de liens. PrestaShop réinitialise maintenant le module lui-même.
+
 ## 1.1.4 — 2026-09-24
 
 - Rangement interne (aucun changement pour le marchand) : points relevés par le validateur PrestaShop Addons, sans effet sur l'affichage ni sur la gestion des listes de liens.
