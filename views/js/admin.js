@@ -1,6 +1,11 @@
 /**
- * FreshApp Links — comportements du back-office.
+ * FreshApp Links
  *
+ * @author    FreshApp.io
+ * @copyright 2026 FreshApp.io
+ * @license   Proprietary - see LICENSE file
+ *
+ * Comportements du back-office :
  * - glisser-déposer des listes et des liens (ordre enregistré en AJAX) ;
  * - synchronisation sélecteur de couleur / champ hexadécimal ;
  * - recherche de la cible d'un lien (produit, catégorie, page CMS).

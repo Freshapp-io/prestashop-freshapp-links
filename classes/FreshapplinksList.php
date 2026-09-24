@@ -26,7 +26,7 @@ class FreshapplinksList extends ObjectModel
     public $position = 0;
 
     /** @var bool */
-    public $active = 1;
+    public $active = true;
 
     /** @var string couleur hexa de l'icône par défaut ('' = currentColor) */
     public $icon_color = '';
@@ -50,7 +50,7 @@ class FreshapplinksList extends ObjectModel
     public $layout = 'column';
 
     /** @var bool affiche le nom de la liste comme titre visible au-dessus des liens */
-    public $show_title = 1;
+    public $show_title = true;
 
     /** @var string nom de la liste (multilangue — sert aussi de titre visible, ex. titre de colonne footer, si show_title est activé) */
     public $name;

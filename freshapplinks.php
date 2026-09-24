@@ -51,7 +51,7 @@ class Freshapplinks extends Module
     {
         $this->name = 'freshapplinks';
         $this->tab = 'front_office_features';
-        $this->version = '1.1.3';
+        $this->version = '1.1.4';
         $this->author = 'FreshApp.io';
         $this->need_instance = 0;
         $this->bootstrap = true;

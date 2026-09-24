@@ -19,7 +19,6 @@ class AdminFreshapplinksLinkController extends ModuleAdminController
 
     public function __construct()
     {
-        $this->context = Context::getContext();
         $this->bootstrap = true;
 
         $this->table = 'freshapplinks_link';
@@ -28,8 +27,6 @@ class AdminFreshapplinksLinkController extends ModuleAdminController
         $this->lang = true;
         $this->_defaultOrderBy = 'position';
         $this->_defaultOrderWay = 'ASC';
-
-        $this->module = Module::getInstanceByName('freshapplinks');
 
         parent::__construct();
 
@@ -59,7 +56,9 @@ class AdminFreshapplinksLinkController extends ModuleAdminController
     /** Compatibilité PS9 : l() n'existe plus sur ModuleAdminController. */
     protected function l($string, $class = null, $addslashes = false, $htmlentities = true)
     {
-        return $this->module ? $this->module->l($string) : $string;
+        $module = $this->module;
+
+        return $module instanceof Freshapplinks ? $module->l($string) : $string;
     }
 
     public function initContent()
@@ -109,13 +108,6 @@ class AdminFreshapplinksLinkController extends ModuleAdminController
         }
 
         return false;
-    }
-
-    private function sanitizeHexColor(string $raw): string
-    {
-        $raw = trim($raw);
-
-        return preg_match('/^#[0-9a-fA-F]{3,6}$/', $raw) ? $raw : '';
     }
 
     private function sanitizeCssLength(string $raw): string
@@ -342,7 +334,7 @@ class AdminFreshapplinksLinkController extends ModuleAdminController
 
         $iconBlock = $this->fetchTemplate('link-form-icon', [
             'fpl_icon_class' => (string) ($link->icon_class ?? ''),
-            'fpl_icon_names' => $this->module->getIconNames(),
+            'fpl_icon_names' => $this->module instanceof Freshapplinks ? $this->module->getIconNames() : [],
             'fpl_icon_image_url' => $iconImage ? $this->module->getPathUri() . $iconImage : '',
             'fpl_colors' => [
                 ['name' => 'icon_color_text', 'label' => $this->l('Couleur icône'), 'value' => $ovGet($ov, 'icon_color')],

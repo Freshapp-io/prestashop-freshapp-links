@@ -27,7 +27,7 @@ class FreshapplinksLink extends ObjectModel
     public $position = 0;
 
     /** @var bool */
-    public $active = 1;
+    public $active = true;
 
     /** @var string product|category|cms|custom */
     public $target_type = 'custom';

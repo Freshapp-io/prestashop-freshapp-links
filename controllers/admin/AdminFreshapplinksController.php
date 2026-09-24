@@ -16,7 +16,6 @@ class AdminFreshapplinksController extends ModuleAdminController
 
     public function __construct()
     {
-        $this->context = Context::getContext();
         $this->bootstrap = true;
 
         $this->table = 'freshapplinks_list';
@@ -26,15 +25,15 @@ class AdminFreshapplinksController extends ModuleAdminController
         $this->_defaultOrderBy = 'position';
         $this->_defaultOrderWay = 'ASC';
 
-        $this->module = Module::getInstanceByName('freshapplinks');
-
         parent::__construct();
     }
 
     /** PS9 compatibility: l() no longer exists on ModuleAdminController. */
     protected function l($string, $class = null, $addslashes = false, $htmlentities = true)
     {
-        return $this->module ? $this->module->l($string) : $string;
+        $module = $this->module;
+
+        return $module instanceof Freshapplinks ? $module->l($string) : $string;
     }
 
     private function sanitizeHexColor(string $raw): string
@@ -99,14 +98,8 @@ class AdminFreshapplinksController extends ModuleAdminController
     /** Rendu d'un gabarit de views/templates/admin. */
     private function fetchTemplate(string $name, array $vars): string
     {
-        return self::renderTemplate($name, $vars);
-    }
-
-    private static function renderTemplate(string $name, array $vars): string
-    {
-        $vars = self::decodeLabels($vars);
-        $smarty = Context::getContext()->smarty;
-        $smarty->assign($vars);
+        $smarty = $this->context->smarty;
+        $smarty->assign(self::decodeLabels($vars));
 
         return $smarty->fetch(_PS_MODULE_DIR_ . 'freshapplinks/views/templates/admin/' . $name . '.tpl');
     }
@@ -181,20 +174,20 @@ class AdminFreshapplinksController extends ModuleAdminController
     }
 
     /** Colonne "Hooks" : affiche les hooks ciblés en badges lisibles. */
-    public static function renderHooksList($value, $row)
+    public function renderHooksList($value, $row)
     {
-        return self::renderTemplate('list-hooks', [
+        return $this->fetchTemplate('list-hooks', [
             'fpl_hooks' => array_values(array_filter(array_map('trim', explode(',', (string) $value)))),
         ]);
     }
 
     /** Colonne "Liens" : nombre de liens + lien direct vers leur gestion. */
-    public static function renderLinksColumn($value, $row)
+    public function renderLinksColumn($value, $row)
     {
-        $url = Context::getContext()->link->getAdminLink('AdminFreshapplinksLink')
+        $url = $this->context->link->getAdminLink('AdminFreshapplinksLink')
             . '&id_freshapplinks_list=' . (int) $row['id_freshapplinks_list'];
 
-        return self::renderTemplate('list-links', ['fpl_url' => $url, 'fpl_count' => (int) $value]);
+        return $this->fetchTemplate('list-links', ['fpl_url' => $url, 'fpl_count' => (int) $value]);
     }
 
     public function renderForm()
@@ -259,7 +252,7 @@ class AdminFreshapplinksController extends ModuleAdminController
         if ($list && $list->id) {
             $manageLinksBtn = $this->fetchTemplate('button-link', [
                 'fpl_form_group' => true,
-                'fpl_url' => Context::getContext()->link->getAdminLink('AdminFreshapplinksLink') . '&id_freshapplinks_list=' . (int) $list->id,
+                'fpl_url' => $this->context->link->getAdminLink('AdminFreshapplinksLink') . '&id_freshapplinks_list=' . (int) $list->id,
                 'fpl_icon' => 'icon-link',
                 'fpl_label' => $this->l('Gérer les liens de cette liste'),
             ]);
@@ -329,7 +322,7 @@ class AdminFreshapplinksController extends ModuleAdminController
             $idTab = (int) Tab::getIdFromClassName('AdminFreshapplinks');
             if ($idTab) {
                 $tab = new Tab($idTab);
-                $tab->active = Tools::getValue('bo_menu_visible') ? 1 : 0;
+                $tab->active = (bool) Tools::getValue('bo_menu_visible');
                 $tab->save();
             }
         }
