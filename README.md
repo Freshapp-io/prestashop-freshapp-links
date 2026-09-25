@@ -27,3 +27,7 @@ servir d'icône.
 |---|---|
 | `PREFIX_freshapplinks_list` / `_lang` | Listes, emplacements, disposition |
 | `PREFIX_freshapplinks_link` / `_lang` | Liens, cible, icône, style |
+
+## Licence
+
+GPL-3.0-or-later — voir le fichier [LICENSE](LICENSE).

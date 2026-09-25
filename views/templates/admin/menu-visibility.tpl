@@ -2,7 +2,7 @@
  * FreshApp Links
  * @author FreshApp.io
  * @copyright 2026 FreshApp.io
- * @license Proprietary - see LICENSE file
+ * @license GPL-3.0-or-later
  *}
 <div class="panel" style="display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:12px 20px;">
   <span>{$fpl_t.label|escape:'html':'UTF-8'}</span>

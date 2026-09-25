@@ -3,7 +3,7 @@
  *
  * @author    FreshApp.io
  * @copyright 2026 FreshApp.io
- * @license   Proprietary - see LICENSE file
+ * @license   GPL-3.0-or-later
  *
  * Comportements du back-office :
  * - glisser-déposer des listes et des liens (ordre enregistré en AJAX) ;

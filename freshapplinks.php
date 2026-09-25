@@ -7,7 +7,7 @@
  *
  * @author    FreshApp.io
  * @copyright 2026 FreshApp.io
- * @license   Proprietary - see LICENSE file
+ * @license   GPL-3.0-or-later
  */
 if (!defined('_PS_VERSION_')) {
     exit;
@@ -51,7 +51,7 @@ class Freshapplinks extends Module
     {
         $this->name = 'freshapplinks';
         $this->tab = 'front_office_features';
-        $this->version = '1.1.5';
+        $this->version = '1.1.6';
         $this->author = 'FreshApp.io';
         $this->need_instance = 0;
         $this->bootstrap = true;

@@ -2,7 +2,7 @@
  * FreshApp Links
  * @author FreshApp.io
  * @copyright 2026 FreshApp.io
- * @license Proprietary - see LICENSE file
+ * @license GPL-3.0-or-later
  *}
 <div class="form-group">
   <label class="control-label col-lg-3">{$fpl_t.label|escape:'html':'UTF-8'}</label>

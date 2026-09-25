@@ -2,7 +2,7 @@
  * FreshApp Links
  * @author FreshApp.io
  * @copyright 2026 FreshApp.io
- * @license Proprietary - see LICENSE file
+ * @license GPL-3.0-or-later
  *}
 {if !empty($freshapplinks_links)}
 <div class="freshapplinks-list freshapplinks-list--{$freshapplinks_hook|escape:'html':'UTF-8'} freshapplinks-list--layout-{if $freshapplinks_list.layout == 'row'}row{else}column{/if}">
